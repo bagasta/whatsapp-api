@@ -1,0 +1,470 @@
+openapi: 3.0.3
+info:
+  title: WhatsApp Multi-Tenant API
+  version: 1.0.0
+  description: REST API for managing WhatsApp Web sessions with AI integration.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+servers:
+  - url: http://localhost:3000
+paths:
+  /sessions:
+    post:
+      operationId: createSession
+      summary: Create or rehydrate a WhatsApp session
+      tags: [Sessions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionRequest'
+      responses:
+        '200':
+          description: Session created or already active
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionStatusResponse'
+        '400':
+          $ref: '#/components/responses/InvalidPayload'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /sessions/{agentId}:
+    get:
+      operationId: getSessionStatus
+      summary: Get session status
+      tags: [Sessions]
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+      responses:
+        '200':
+          description: Session status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionStatusResponse'
+        '404':
+          $ref: '#/components/responses/SessionNotFound'
+    delete:
+      operationId: deleteSession
+      summary: Delete a session and cleanup auth files
+      tags: [Sessions]
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+      responses:
+        '200':
+          description: Session deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      deleted:
+                        type: boolean
+                  traceId:
+                    type: string
+        '404':
+          $ref: '#/components/responses/SessionNotFound'
+  /sessions/{agentId}/reconnect:
+    post:
+      operationId: reconnectSession
+      summary: Force reconnection and regenerate QR
+      tags: [Sessions]
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+      responses:
+        '200':
+          description: Reconnection initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionStatusResponse'
+        '404':
+          $ref: '#/components/responses/SessionNotFound'
+  /sessions/{agentId}/qr:
+    post:
+      summary: Generate a fresh QR code for the session
+      operationId: generateSessionQr
+      tags: [Sessions]
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+      responses:
+        '200':
+          description: QR payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      agentId:
+                        type: string
+                      qr:
+                        $ref: '#/components/schemas/QrPayload'
+                      qrUpdatedAt:
+                        type: string
+                        nullable: true
+                  traceId:
+                    type: string
+        '404':
+          $ref: '#/components/responses/SessionNotFound'
+        '409':
+          $ref: '#/components/responses/SessionNotReady'
+  /agents/{agentId}/run:
+    post:
+      operationId: runAgent
+      summary: Forward a message payload to the AI backend
+      tags: [Agents]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiRunRequest'
+      responses:
+        '200':
+          description: AI response returned (and optionally sent to WhatsApp)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      reply:
+                        type: string
+                        nullable: true
+                      replySent:
+                        type: boolean
+                  traceId:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/SessionNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '502':
+          $ref: '#/components/responses/AiError'
+        '504':
+          $ref: '#/components/responses/AiTimeout'
+  /agents/{agentId}/messages:
+    post:
+      operationId: sendAgentMessage
+      summary: Send a text message through an agent session
+      tags: [Agents]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '200':
+          description: Message accepted for delivery
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      delivered:
+                        type: boolean
+                  traceId:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/SessionNotFound'
+        '409':
+          $ref: '#/components/responses/SessionNotReady'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /agents/{agentId}/media:
+    post:
+      operationId: sendAgentMedia
+      summary: Send an image message
+      tags: [Agents]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMediaRequest'
+      responses:
+        '200':
+          description: Media accepted for delivery
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      delivered:
+                        type: boolean
+                      previewPath:
+                        type: string
+                        nullable: true
+                  traceId:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/SessionNotFound'
+        '409':
+          $ref: '#/components/responses/SessionNotReady'
+        '413':
+          $ref: '#/components/responses/MediaTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /health:
+    get:
+      operationId: getHealth
+      summary: Service health check
+      tags: [Observability]
+      responses:
+        '200':
+          description: Current health information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  uptime:
+                    type: number
+                  timestamp:
+                    type: string
+                  traceId:
+                    type: string
+        '400':
+          $ref: '#/components/responses/InvalidPayload'
+  /metrics:
+    get:
+      operationId: getMetrics
+      summary: Prometheus metrics
+      tags: [Observability]
+      responses:
+        '200':
+          description: Prometheus metrics payload
+          content:
+            text/plain:
+              schema:
+                type: string
+        '404':
+          $ref: '#/components/responses/SessionNotFound'
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: APIKey
+  parameters:
+    AgentId:
+      name: agentId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for the agent/session
+  responses:
+    InvalidPayload:
+      description: Invalid payload supplied
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    SessionNotFound:
+      description: Session not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    SessionNotReady:
+      description: Session not connected
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RateLimited:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    MediaTooLarge:
+      description: Media exceeded 10MB
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    AiTimeout:
+      description: Downstream AI timed out
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    AiError:
+      description: AI downstream error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ServerError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    SessionRequest:
+      type: object
+      required: [userId, agentId, agentName]
+      properties:
+        userId:
+          type: integer
+        agentId:
+          type: string
+        agentName:
+          type: string
+        apikey:
+          type: string
+          description: Optional API key fallback when no active key exists
+    SessionStatusResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/SessionStatus'
+        traceId:
+          type: string
+    SessionStatus:
+      type: object
+      properties:
+        agentId:
+          type: string
+        agentName:
+          type: string
+        status:
+          type: string
+          enum: [awaiting_qr, connected, disconnected, auth_failed]
+        lastConnectedAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastDisconnectedAt:
+          type: string
+          format: date-time
+          nullable: true
+        liveState:
+          type: object
+          properties:
+            isReady:
+              type: boolean
+            hasClient:
+              type: boolean
+            sessionState:
+              type: string
+            qr:
+              $ref: '#/components/schemas/QrPayload'
+            qrUpdatedAt:
+              type: string
+              nullable: true
+    AiRunRequest:
+      type: object
+      required: [input, session_id]
+      properties:
+        input:
+          type: string
+        session_id:
+          type: string
+        parameters:
+          type: object
+          properties:
+            max_steps:
+              type: integer
+            metadata:
+              type: object
+              additionalProperties: true
+    SendMessageRequest:
+      type: object
+      required: [to, message]
+      properties:
+        to:
+          type: string
+        message:
+          type: string
+        quotedMessageId:
+          type: string
+          description: Message ID to reply to
+    SendMediaRequest:
+      type: object
+      required: [to]
+      properties:
+        to:
+          type: string
+        caption:
+          type: string
+        data:
+          type: string
+          description: Base64-encoded image data
+        url:
+          type: string
+          format: uri
+        filename:
+          type: string
+        mimeType:
+          type: string
+        save_to_temp:
+          type: boolean
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            traceId:
+              type: string
+    QrPayload:
+      type: object
+      nullable: true
+      properties:
+        contentType:
+          type: string
+          example: image/png
+        base64:
+          type: string
