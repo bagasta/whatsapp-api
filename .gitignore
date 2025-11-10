@@ -1,21 +1,40 @@
-# WhatsApp Web session & caches
-.wwebjs_auth/
-.wwebjs_cache/
-.wwebjs_cache_* 
-.session/
-sessions/
-
-# Umum Node/JS
+# Node
 node_modules/
 npm-debug.log*
+yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# Build & coverage
 dist/
 build/
-tmp/
-logs/
-*.log
+coverage/
 
-# Secrets
+# Env & logs
 .env
 .env.*
+*.log
+logs/
+tmp/
+.cache/
+
+# WhatsApp Web JS / Playwright / Chromium cache & sessions
+.wwebjs_auth/
+.wwebjs_cache/
+.session/
+sessions/
+**/Default/Cache/
+**/Default/Code Cache/
+**/Default/GPUCache/
+**/Service Worker/
+**/IndexedDB/
+**/Local Storage/
+**/Session Storage/
+**/WebStorage/
+DevToolsActivePort
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
