@@ -90,9 +90,8 @@ class WhatsappClientManager {
   async deleteSession(agentId) {
     const agentRecord = await this.getAgent(agentId);
     if (!agentRecord) {
-      const error = new Error('Session not found');
-      error.code = 'SESSION_NOT_FOUND';
-      throw error;
+      await this.teardownClient(agentId, { preserveDb: true, clearAuth: true });
+      return { deleted: false, alreadyRemoved: true };
     }
     await this.teardownClient(agentId, { preserveDb: false, clearAuth: true });
     await query('delete from whatsapp_user where user_id = $1 and agent_id = $2', [

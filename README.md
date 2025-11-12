@@ -75,19 +75,22 @@ openapi.yaml/json          # OpenAPI 3.0 specs
 - Prometheus metrics (`/metrics`) + `/health`
 
 ### Example Requests
-Replace `AGENT_ID` and `API_KEY` with actual values.
+Replace `AGENT_ID` and `API_KEY` with actual values. `AGENT_ID` **harus** sama persis dengan kolom `agent_id` pada tabel `whatsapp_user` (bukan `agentName`). Jika ragu, jalankan kueri berikut untuk mengecek:
+```sql
+select agent_id, agent_name from whatsapp_user order by updated_at desc;
+```
 
 #### Create Session
 ```bash
 curl -X POST http://localhost:3000/sessions \
   -H 'Content-Type: application/json' \
-  -d '{"userId":"ff2c9e4b-94fd-4120-9d95-cb4d9bac3a4c","agentId":"support-bot","agentName":"Support Bot","apikey":"api-key"}'
+  -d '{"userId":"ff2c9e4b-94fd-4120-9d95-cb4d9bac3a4c","agentId":"{agentId}","agentName":"Support Bot","apikey":"api-key"}'
 ```
 Gunakan endpoint QR (lihat di bawah) untuk mengambil QR base64 setelah sesi dibuat.
 
 #### Get Session Status
 ```bash
-curl http://localhost:3000/sessions/support-bot
+curl http://localhost:3000/sessions/{agentId}
 ```
 Respon `liveState.qr` pada endpoint status akan terisi setelah QR digenerate melalui endpoint khusus di bawah, dan memiliki struktur `{ "contentType": "image/png", "base64": "..." }`.
 
@@ -106,17 +109,18 @@ Gunakan nilai `base64` untuk membuat file PNG, sementara `contentType` bisa menj
 
 #### Delete Session
 ```bash
-curl -X DELETE http://localhost:3000/sessions/support-bot
+curl -X DELETE http://localhost:3000/sessions/{agentId}
 ```
+Endpoint ini idempotent—jika sesi sudah tidak ada, respons tetap `200` dengan `deleted: false` untuk memudahkan automated cleanup.
 
 #### Force Reconnect
 ```bash
-curl -X POST http://localhost:3000/sessions/support-bot/reconnect
+curl -X POST http://localhost:3000/sessions/{agentId}/reconnect
 ```
 
 #### Run AI Pipeline
 ```bash
-curl -X POST http://localhost:3000/agents/support-bot/run \
+curl -X POST http://localhost:3000/agents/{agentId}/run \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer API_KEY' \
   -d '{
@@ -128,7 +132,7 @@ curl -X POST http://localhost:3000/agents/support-bot/run \
 
 #### Send Text Message
 ```bash
-curl -X POST http://localhost:3000/agents/support-bot/messages \
+curl -X POST http://localhost:3000/agents/{agentId}/messages \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer API_KEY' \
   -d '{"to":"6281234567890","message":"Halo dari API"}'
@@ -136,7 +140,7 @@ curl -X POST http://localhost:3000/agents/support-bot/messages \
 
 #### Send Media (Base64)
 ```bash
-curl -X POST http://localhost:3000/agents/support-bot/media \
+curl -X POST http://localhost:3000/agents/{agentId}/media \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer API_KEY' \
   -d '{"to":"6281234567890","caption":"Sample","data":"<base64>","filename":"sample.jpg","mimeType":"image/jpeg"}'
@@ -144,7 +148,7 @@ curl -X POST http://localhost:3000/agents/support-bot/media \
 
 #### Send Media (URL)
 ```bash
-curl -X POST http://localhost:3000/agents/support-bot/media \
+curl -X POST http://localhost:3000/agents/{agentId}/media \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer API_KEY' \
   -d '{"to":"6281234567890","url":"https://example.com/image.jpg"}'
@@ -165,3 +169,10 @@ curl http://localhost:3000/metrics
 - LocalAuth directories live under `WWEBJS_AUTH_DIR/session-<agentId>`.
 - `/sessions/*` endpoints are intentionally unauthenticated (per PRD); agent endpoints enforce Bearer auth with lazy API-key sync.
 - The service is single-process by design and ready for PM2 supervision.
+
+### Automated Endpoint Tests
+Gunakan skrip smoke-test berbasis mock untuk memastikan kontrak endpoint tetap aman tanpa membutuhkan koneksi WhatsApp/AI nyata:
+```bash
+npm test
+```
+Skrip ini menjalankan seluruh rute utama (`/sessions/*`, `/agents/*`, `/health`) menggunakan dependency injection sehingga dapat dieksekusi kapan saja.

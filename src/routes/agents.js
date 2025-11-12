@@ -1,12 +1,14 @@
 const express = require('express');
-const authMiddleware = require('../middleware/authMiddleware');
+const defaultAuthMiddleware = require('../middleware/authMiddleware');
 const { sendError } = require('../utils/responses');
 const { mapError } = require('../utils/errorMapping');
 const { normalizeJid } = require('../utils/jid');
-const aiProxy = require('../services/aiProxy');
+const defaultAiProxy = require('../services/aiProxy');
 
-module.exports = (manager) => {
+module.exports = (manager, options = {}) => {
   const router = express.Router();
+  const authMiddleware = options.authMiddleware || defaultAuthMiddleware;
+  const aiProxy = options.aiProxy || defaultAiProxy;
 
   router.post('/:agentId/run', authMiddleware, async (req, res) => {
     const traceId = req.traceId;

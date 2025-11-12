@@ -103,7 +103,13 @@
                       "type": "object",
                       "properties": {
                         "deleted": {
-                          "type": "boolean"
+                          "type": "boolean",
+                          "description": "True when a session row was removed"
+                        },
+                        "alreadyRemoved": {
+                          "type": "boolean",
+                          "description": "Returned when the session was already deleted",
+                          "nullable": true
                         }
                       }
                     },
@@ -114,9 +120,6 @@
                 }
               }
             }
-          },
-          "404": {
-            "$ref": "#/components/responses/SessionNotFound"
           }
         }
       }
@@ -493,7 +496,7 @@
         "schema": {
           "type": "string"
         },
-        "description": "Unique identifier for the agent/session"
+        "description": "Identifier stored in DB (`whatsapp_user.agent_id`); do not send the human-readable agent name"
       }
     },
     "responses": {
