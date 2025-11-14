@@ -21,6 +21,15 @@ module.exports = (manager) => {
         agentName,
         apiKey: apikey,
       });
+      if (!data.liveState) {
+        data.liveState = {};
+      }
+      const shouldGenerateQr = !data.liveState.isReady && !data.liveState.qr;
+      if (shouldGenerateQr) {
+        const qrPayload = await manager.generateQr(agentId);
+        data.liveState.qr = qrPayload.qr;
+        data.liveState.qrUpdatedAt = qrPayload.qrUpdatedAt;
+      }
       return res.status(200).json({ data, traceId });
     } catch (error) {
       const mapped = mapError(error);

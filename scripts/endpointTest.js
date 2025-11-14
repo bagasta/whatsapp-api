@@ -34,6 +34,11 @@ const notFound = () => {
 
 const createMockManager = () => {
   let deleted = false;
+  let qrPayload = {
+    agentId,
+    qr: { contentType: 'image/png', base64: 'ZmFrZS1xci1kYXRh' },
+    qrUpdatedAt: new Date().toISOString(),
+  };
   return {
     createOrResumeSession: async ({ agentId: incomingAgentId }) => {
       if (incomingAgentId !== agentId) {
@@ -67,11 +72,7 @@ const createMockManager = () => {
       if (incomingAgentId !== agentId) {
         throw notFound();
       }
-      return {
-        agentId: incomingAgentId,
-        qr: { contentType: 'image/png', base64: 'ZmFrZS1xci1kYXRh' },
-        qrUpdatedAt: new Date().toISOString(),
-      };
+      return qrPayload;
     },
     sendText: async () => ({ delivered: true }),
     sendMedia: async () => ({ delivered: true, previewPath: '/tmp/mock-preview.png' }),
@@ -125,6 +126,7 @@ const run = async () => {
         });
         assert.equal(res.status, 200);
         assert.equal(res.body.data.agentId, agentId);
+        assert.equal(res.body.data.liveState.qr.base64, 'ZmFrZS1xci1kYXRh');
       },
     },
     {

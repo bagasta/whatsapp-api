@@ -86,7 +86,7 @@ curl -X POST http://localhost:3000/sessions \
   -H 'Content-Type: application/json' \
   -d '{"userId":"ff2c9e4b-94fd-4120-9d95-cb4d9bac3a4c","agentId":"{agentId}","agentName":"Support Bot","apikey":"api-key"}'
 ```
-Gunakan endpoint QR (lihat di bawah) untuk mengambil QR base64 setelah sesi dibuat.
+Respons endpoint ini sekarang sudah menyertakan `data.liveState.qr` (ikut menunggu hingga QR tersedia), jadi Anda bisa langsung menampilkan QR tanpa memanggil endpoint lain.
 
 #### Get Session Status
 ```bash
@@ -98,7 +98,7 @@ Respon `liveState.qr` pada endpoint status akan terisi setelah QR digenerate mel
 ```bash
 curl -X POST http://localhost:3000/sessions/support-bot/qr
 ```
-Endpoint ini memaksa WhatsApp client menghasilkan QR dan menunggu hingga QR tersedia (maks 60 detik). Respons `data.qr` memiliki struktur:
+Endpoint ini tetap tersedia jika Anda ingin memaksa regenerasi QR manual (misalnya QR sebelumnya sudah kadaluarsa). Respons `data.qr` memiliki struktur:
 ```json
 {
   "contentType": "image/png",
