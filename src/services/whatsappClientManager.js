@@ -43,6 +43,7 @@ class WhatsappClientManager {
     this.sessions = new Map();
     this.rateLimiter = rateLimiter;
     this.readyPromises = new Map();
+    this.reconnectTimers = new Map();
   }
 
   async bootstrapPersistedSessions() {
@@ -259,6 +260,7 @@ class WhatsappClientManager {
       isReady: false,
       status: agentRecord.status,
       lastAgentRefresh: Date.now(),
+      shuttingDown: false,
     };
     this.sessions.set(agentRecord.agent_id, session);
 
@@ -303,13 +305,20 @@ class WhatsappClientManager {
     });
 
     client.on('auth_failure', async (msg) => {
+      if (session.shuttingDown) {
+        return;
+      }
       session.status = 'auth_failed';
       session.isReady = false;
-      await this.updateStatus(agentRecord, 'auth_failed');
+      await this.updateStatus(agentRecord, 'auth_failed', { last_disconnected_at: 'now()' });
       logger.error({ agentId: agentRecord.agent_id, event: 'session.auth_failure', msg }, 'Auth failure');
+      this.scheduleSessionRestart(agentRecord, { reason: 'auth_failure', clearAuth: true });
     });
 
     client.on('disconnected', async (reason) => {
+      if (session.shuttingDown) {
+        return;
+      }
       session.status = 'disconnected';
       session.isReady = false;
       if (session.metricsCounted) {
@@ -318,6 +327,8 @@ class WhatsappClientManager {
       }
       await this.updateStatus(agentRecord, 'disconnected', { last_disconnected_at: 'now()' });
       logger.warn({ agentId: agentRecord.agent_id, event: 'session.disconnected', reason }, 'Session disconnected');
+      const clearAuth = typeof reason === 'string' && reason.toLowerCase().includes('logout');
+      this.scheduleSessionRestart(agentRecord, { reason: reason || 'disconnected', clearAuth });
     });
 
     client.on('message', (message) => this.handleInboundMessage({ session, message }));
@@ -433,6 +444,14 @@ class WhatsappClientManager {
 
   async teardownClient(agentId, { preserveDb = true, clearAuth = false } = {}) {
     const session = this.sessions.get(agentId);
+    const timer = this.reconnectTimers.get(agentId);
+    if (timer) {
+      clearTimeout(timer);
+      this.reconnectTimers.delete(agentId);
+    }
+    if (session) {
+      session.shuttingDown = true;
+    }
     if (session?.client) {
       try {
         await session.client.destroy();
@@ -444,6 +463,7 @@ class WhatsappClientManager {
       metrics.sessionsActive.dec();
     }
     this.sessions.delete(agentId);
+    this.readyPromises.delete(agentId);
 
     if (!preserveDb) {
       await query(
@@ -524,6 +544,41 @@ class WhatsappClientManager {
 
     this.readyPromises.set(agentId, entry);
     return entry.promise;
+  }
+
+  scheduleSessionRestart(agentRecord, { reason = 'unknown', clearAuth = false, attempt = 1, delayMs } = {}) {
+    const agentId = agentRecord.agent_id || agentRecord;
+    if (this.reconnectTimers.has(agentId)) {
+      return;
+    }
+
+    const delay = typeof delayMs === 'number' ? delayMs : Math.min(30_000, attempt * 5000);
+    const timer = setTimeout(async () => {
+      this.reconnectTimers.delete(agentId);
+      try {
+        const freshRecord = (await this.getAgent(agentId)) || agentRecord;
+        if (!freshRecord) {
+          logger.warn({ agentId, event: 'session.reconnect.skip' }, 'Skipping reconnect because agent record is missing');
+          return;
+        }
+        await this.teardownClient(agentId, { preserveDb: true, clearAuth });
+        await this.ensureClient(freshRecord);
+        logger.info({ agentId, attempt, reason, event: 'session.reconnect.success' }, 'Session restart completed');
+      } catch (error) {
+        logger.error({ err: error, agentId, attempt, reason, event: 'session.reconnect.error' }, 'Failed restarting session');
+        this.scheduleSessionRestart(agentRecord, {
+          reason,
+          clearAuth,
+          attempt: attempt + 1,
+          delayMs: Math.min(delay * 2, 60_000),
+        });
+      }
+    }, delay);
+
+    if (timer.unref) {
+      timer.unref();
+    }
+    this.reconnectTimers.set(agentId, timer);
   }
 
   async upsertAgentRecord({ userId, agentId, agentName, apiKey }) {

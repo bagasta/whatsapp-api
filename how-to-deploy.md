@@ -101,7 +101,7 @@ sudo nano /etc/nginx/sites-available/wapi-v1.chiefaiofficer.id
      server_name wapi-v1.chiefaiofficer.id;
 
      location / {
-       proxy_pass http://127.0.0.1:3000;
+       proxy_pass http://127.0.0.1:3321;
        proxy_http_version 1.1;
        proxy_set_header Upgrade $http_upgrade;
        proxy_set_header Connection "upgrade";
